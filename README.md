@@ -1,4 +1,4 @@
-# readwise-terminal-quotes
+# readwise_terminal_quotes
 
 A random Readwise highlight on every terminal open.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Add to shell startup (bash/zsh)
-QUOTE_CMD="python3 ~/Documents/readwise-terminal-quotes/quote.py"
+QUOTE_CMD="python3 ~/Documents/projects/readwise_terminal_quotes/quote.py"
 
 echo "Add this line to your shell config:"
 echo
