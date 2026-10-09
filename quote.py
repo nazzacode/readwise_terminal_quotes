@@ -26,20 +26,39 @@ def save_cache(cache):
     CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
     CACHE_FILE.write_text(json.dumps(cache))
 
+BLUE = "\033[34m"
+GREY = "\033[90m"
+BOLD = "\033[1m"
+
+def stat_strip(ind, width):
+    """Faded system footer: host ▸ os ▸ wm ▸ uptime ▸ mem, from fastfetch json."""
+    try:
+        r = {m["type"]: m.get("result") for m in json.loads(subprocess.run(
+            ["fastfetch", "--format", "json", "-s", "title:os:uptime:memory"],
+            capture_output=True, text=True, timeout=2).stdout)}
+        up  = r["Uptime"]["uptime"] // 60000
+        gb  = lambda b: f"{b / 2**30:.1f}"
+        wm  = os.environ.get("XDG_CURRENT_DESKTOP", "").split(":")[0]
+        parts = [r["Title"]["hostName"], f"NixOS {r['OS']['versionID']}", wm,
+                 f"up {up // 1440}d {up // 60 % 24}h",
+                 f"{gb(r['Memory']['used'])}/{gb(r['Memory']['total'])} GB"]
+    except Exception:
+        return []
+    return [f"{ind}{GREY}{'╌' * width}{RESET}",
+            f"{ind}{GREY}{' ▸ '.join(x for x in parts if x)}{RESET}"]
+
 def fmt(q):
-    pad      = "  "
-    term_w   = shutil.get_terminal_size(fallback=(80, 24)).columns
-    wrap_w   = min(term_w - len(pad), 80)
-    lines    = textwrap.fill(f'"{q["text"].strip().replace(chr(173), "")}"', width=wrap_w).split('\n')
-    tag_str = ("  " + "  ".join(f"{CYAN}#{t}{RESET}{DIM}" for t in q.get('tags', []))) if q.get('tags') else ""
-    out = ["\n"]
-    for line in lines:
-        out.append(f"{pad}{ITALIC}{line}{RESET}")
-    out.append("")
-    link = f"\033]8;;{q['url']}\033\\↗\033]8;;\033\\" if q.get('url') else ""
-    out.append(f"{pad}{DIM}— {q['author']}, {ITALIC}{q['title']}{RESET}{DIM}{tag_str}  {link}{RESET}")
-    out.append("")
-    return '\n'.join(out)
+    """Quote-first (option F): big “, upright text, author in blue, faded stat footer."""
+    term_w = shutil.get_terminal_size(fallback=(80, 24)).columns
+    ind    = " " * (5 if term_w >= 74 else 2)
+    wrap_w = max(20, min(term_w - 2 * len(ind), 64))
+    text   = q["text"].strip().replace(chr(173), "")
+    link   = f"{GREY}\033]8;;{q['url']}\033\\↗\033]8;;\033\\{RESET}" if q.get("url") else ""
+    out = ["", f"{ind}{BLUE}{BOLD}“{RESET}"]
+    out += [f"{ind}{l}" for l in textwrap.fill(text, width=wrap_w).split("\n")]
+    out += ["", f"{ind}{BLUE}{q['author']}{RESET}  {DIM}{ITALIC}{q['title']}{RESET}  {link}", ""]
+    out += stat_strip(ind, wrap_w) + [""]
+    return "\n".join(out)
 
 def fetch_one(cache):
     if time.time() - cache['count_at'] > COUNT_TTL:
