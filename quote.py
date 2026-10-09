@@ -48,15 +48,17 @@ def stat_strip(ind, width):
             f"{ind}{GREY}{' ▸ '.join(x for x in parts if x)}{RESET}"]
 
 def fmt(q):
-    """Quote-first (option F): big “, upright text, author in blue, faded stat footer."""
+    """Quote-first: hanging “…”, upright text, — author, title; faded stat footer."""
     term_w = shutil.get_terminal_size(fallback=(80, 24)).columns
     ind    = " " * (5 if term_w >= 74 else 2)
     wrap_w = max(20, min(term_w - 2 * len(ind), 64))
     text   = q["text"].strip().replace(chr(173), "")
     link   = f"{GREY}\033]8;;{q['url']}\033\\↗\033]8;;\033\\{RESET}" if q.get("url") else ""
-    out = ["", f"{ind}{BLUE}{BOLD}“{RESET}"]
-    out += [f"{ind}{l}" for l in textwrap.fill(text, width=wrap_w).split("\n")]
-    out += ["", f"{ind}{BLUE}{q['author']}{RESET}  {DIM}{ITALIC}{q['title']}{RESET}  {link}", ""]
+    lines  = textwrap.fill(f"{text}”", width=wrap_w).split("\n")
+    out = [""] + [f"{ind[:-1]}{BLUE}“{RESET}{l}" if i == 0 else f"{ind}{l}"  # “ hangs in the margin
+                  for i, l in enumerate(lines)]
+    out[-1] = out[-1][:-1] + f"{BLUE}”{RESET}"
+    out += ["", f"{ind}{GREY}—{RESET} {q['author']}{GREY}, {ITALIC}{q['title']}{RESET}  {link}", ""]
     out += stat_strip(ind, wrap_w) + [""]
     return "\n".join(out)
 
