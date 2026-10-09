@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, os, random, shutil, subprocess, sys, textwrap, time, urllib.request
+import json, os, random, re, shutil, subprocess, sys, textwrap, time, urllib.request
 from pathlib import Path
 
 TOKEN      = os.getenv('READWISE_TOKEN', '')
@@ -47,19 +47,22 @@ def stat_strip(ind, width):
     return [f"{ind}{GREY}{'╌' * width}{RESET}",
             f"{ind}{GREY}{' ▸ '.join(x for x in parts if x)}{RESET}"]
 
-def fmt(q):
-    """Quote-first: hanging “…”, upright text, — author, title; faded stat footer."""
+def fmt(q, footer=False):
+    """Hanging “…” italic quote, bold author, dim title; optional faded stat footer."""
     term_w = shutil.get_terminal_size(fallback=(80, 24)).columns
     ind    = " " * (5 if term_w >= 74 else 2)
     wrap_w = max(20, min(term_w - 2 * len(ind), 64))
-    text   = q["text"].strip().replace(chr(173), "")
+    text   = re.sub(r"!\[[^\]]*\]\([^)]*\)|https?://t\.co/\S+", "", q["text"])  # tweet images/short links
+    text   = " ".join(text.replace(chr(173), "").split())
     link   = f"{GREY}\033]8;;{q['url']}\033\\↗\033]8;;\033\\{RESET}" if q.get("url") else ""
-    lines  = textwrap.fill(f"{text}”", width=wrap_w).split("\n")
-    out = [""] + [f"{ind[:-1]}{BLUE}“{RESET}{l}" if i == 0 else f"{ind}{l}"  # “ hangs in the margin
-                  for i, l in enumerate(lines)]
-    out[-1] = out[-1][:-1] + f"{BLUE}”{RESET}"
-    out += ["", f"{ind}{GREY}—{RESET} {q['author']}{GREY}, {ITALIC}{q['title']}{RESET}  {link}", ""]
-    out += stat_strip(ind, wrap_w) + [""]
+    mark   = lambda c: f"{RESET}{BLUE}{c}{RESET}{ITALIC}"
+    lines  = textwrap.fill(f"“{text}”", width=wrap_w + 1).split("\n")
+    lines  = [l.replace("“", mark("“"), 1) if i == 0 else " " + l for i, l in enumerate(lines)]
+    lines[-1] = lines[-1][:-1] + mark("”")
+    out = [""] + [f"{ind[:-1]}{ITALIC}{l}{RESET}" for l in lines]  # “ hangs in the margin; quote italic, author bold
+    out += ["", f"{ind}{BOLD}{q['author']}{RESET}{GREY}, {ITALIC}{q['title']}{RESET}  {link}", ""]
+    if footer:  # no fastfetch above (tmux/ssh/narrow) → one-line stats instead
+        out += stat_strip(ind, wrap_w) + [""]
     return "\n".join(out)
 
 def fetch_one(cache):
@@ -99,13 +102,13 @@ def main():
     if cache['queue']:
         q = cache['queue'].pop(0)  # consume front
         save_cache(cache)
-        print(fmt(q))
+        print(fmt(q, '--footer' in sys.argv))
     else:
         # queue empty — fetch live (first run or lagging behind)
         try:
             q = fetch_one(cache)
             save_cache(cache)
-            print(fmt(q) if q else "📚 No highlight found")
+            print(fmt(q, '--footer' in sys.argv) if q else "📚 No highlight found")
         except Exception:
             print("❌ Network error — no cached quotes")
             return
